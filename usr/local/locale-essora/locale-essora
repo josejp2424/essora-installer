@@ -1,0 +1,1049 @@
+#!/usr/bin/env python3
+# AUTOR: josejp2424 para Essora
+# GPL-3.0 License
+
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk, GdkPixbuf, Gdk, GLib
+import os
+import sys
+import subprocess
+import tempfile
+import gettext
+from pathlib import Path
+
+# Internationalization Setup
+LOCALE_DIR = "/usr/share/locale"
+gettext.bindtextdomain("locale-Essora", LOCALE_DIR)
+gettext.textdomain("locale-Essora")
+_ = gettext.gettext
+
+class EssoraLocaleGTK(Gtk.Window):
+    def __init__(self):
+        super().__init__(title=_("Essora Locale"))
+        self._force_quit = False  # silent quit after Apply
+        
+        # Important paths
+        self.locale_conf = Path("/etc/locale.conf")
+        self.keyboard_config = Path("/etc/default/keyboard")
+        self.locale_gen = Path("/etc/locale.gen")
+        self.environment_file = Path("/etc/environment")
+        self.timezone_file = Path("/etc/timezone")
+        self.icon_path = "/usr/local/locale-essora/essora-locale.png"
+        self.temp_files = []
+        
+        # Window configuration
+        self.set_default_size(900, 650)
+        self.set_position(Gtk.WindowPosition.CENTER)
+        
+        # Set window icon
+        self.set_window_icon()
+        
+        # Load locale descriptions
+        self.locale_descriptions = self.load_locale_descriptions()
+        
+        # Ensure /etc/default/locale symlink exists
+        self.ensure_locale_symlink()
+        
+        # Load current settings
+        self.current_settings = self.load_locale_settings()
+        self.keyboard_settings = self.load_keyboard_settings()
+        self.environment_settings = self.load_environment_settings()
+        self.current_timezone = self.get_current_timezone()
+        
+        # Setup UI
+        self.setup_ui()
+        
+        # Check root privileges
+        self.check_root()
+        
+        # Connect destroy signal
+        self.connect("delete-event", self.on_close)
+    
+    def set_window_icon(self):
+        """Set window icon"""
+        try:
+            if os.path.exists(self.icon_path):
+                self.set_icon_from_file(self.icon_path)
+        except Exception as e:
+            print(f"Error loading icon: {e}")
+    
+    def check_root(self):
+        """Verify root privileges"""
+        if os.geteuid() != 0:
+            subprocess.call(['sudo', 'python3'] + sys.argv)
+            sys.exit()
+    
+    def setup_ui(self):
+        """Configure user interface using system theme"""
+        # Main container
+        main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
+        self.add(main_box)
+        
+        # Header with icon and title
+        header = self.create_header()
+        main_box.pack_start(header, False, False, 0)
+        
+        # Separator
+        sep = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        main_box.pack_start(sep, False, False, 0)
+        
+        # Content area with scrolling
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        main_box.pack_start(scrolled, True, True, 0)
+        
+        content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=20)
+        content.set_margin_top(20)
+        content.set_margin_bottom(20)
+        content.set_margin_start(30)
+        content.set_margin_end(30)
+        scrolled.add(content)
+        
+        # Language section
+        content.pack_start(self.create_language_section(), False, False, 0)
+        
+        # Keyboard section
+        content.pack_start(self.create_keyboard_section(), False, False, 0)
+        
+        # Timezone section
+        content.pack_start(self.create_timezone_section(), False, False, 0)
+        
+        # Environment toggle
+        content.pack_start(self.create_environment_section(), False, False, 0)
+        
+        # Console
+        content.pack_start(self.create_console(), True, True, 0)
+        
+        # Bottom action bar
+        sep2 = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        main_box.pack_start(sep2, False, False, 0)
+        
+        action_bar = self.create_action_bar()
+        main_box.pack_start(action_bar, False, False, 0)
+        
+        # Update display
+        self.update_display()
+    
+    def create_header(self):
+        """Create header with icon and title"""
+        header = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=15)
+        header.set_margin_top(20)
+        header.set_margin_bottom(20)
+        header.set_margin_start(30)
+        header.set_margin_end(30)
+        
+        # Icon
+        try:
+            if os.path.exists(self.icon_path):
+                pixbuf = GdkPixbuf.Pixbuf.new_from_file_at_scale(
+                    self.icon_path, 64, 64, True
+                )
+                icon = Gtk.Image.new_from_pixbuf(pixbuf)
+                header.pack_start(icon, False, False, 0)
+        except Exception as e:
+            print(f"Error loading icon: {e}")
+        
+        # Title and subtitle
+        title_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        
+        title = Gtk.Label()
+        title.set_markup("<span size='18000' weight='bold'>Essora Locale</span>")
+        title.set_halign(Gtk.Align.START)
+        title_box.pack_start(title, False, False, 0)
+        
+        subtitle = Gtk.Label(label=_("Language, Keyboard and Timezone Configuration"))
+        subtitle.set_halign(Gtk.Align.START)
+        subtitle.set_opacity(0.7)
+        title_box.pack_start(subtitle, False, False, 0)
+        
+        header.pack_start(title_box, True, True, 0)
+        
+        return header
+    
+    def create_language_section(self):
+        """Create language section"""
+        frame = Gtk.Frame()
+        frame.set_label(_("Language Settings"))
+        frame.set_shadow_type(Gtk.ShadowType.IN)
+        
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_margin_top(15)
+        box.set_margin_bottom(15)
+        box.set_margin_start(15)
+        box.set_margin_end(15)
+        frame.add(box)
+        
+        # System language row
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        
+        label = Gtk.Label(label=_("System Language:"))
+        label.set_halign(Gtk.Align.START)
+        row.pack_start(label, False, False, 0)
+        
+        self.lang_value = Gtk.Label()
+        self.lang_value.set_halign(Gtk.Align.START)
+        self.lang_value.set_line_wrap(True)
+        self.lang_value.set_max_width_chars(60)
+        self.lang_value.set_selectable(True)
+        row.pack_start(self.lang_value, True, True, 0)
+        
+        btn = Gtk.Button(label=_("Change"))
+        btn.connect("clicked", lambda x: self.change_system_lang())
+        row.pack_start(btn, False, False, 0)
+        
+        box.pack_start(row, False, False, 0)
+        
+        return frame
+    
+    def create_keyboard_section(self):
+        """Create keyboard section"""
+        frame = Gtk.Frame()
+        frame.set_label(_("Keyboard Settings"))
+        frame.set_shadow_type(Gtk.ShadowType.IN)
+        
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_margin_top(15)
+        box.set_margin_bottom(15)
+        box.set_margin_start(15)
+        box.set_margin_end(15)
+        frame.add(box)
+        
+        # Layout row
+        layout_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        
+        layout_label = Gtk.Label(label=_("Layout:"))
+        layout_label.set_halign(Gtk.Align.START)
+        layout_label.set_width_chars(15)
+        layout_row.pack_start(layout_label, False, False, 0)
+        
+        self.kb_layout_value = Gtk.Label()
+        self.kb_layout_value.set_halign(Gtk.Align.START)
+        self.kb_layout_value.set_selectable(True)
+        layout_row.pack_start(self.kb_layout_value, True, True, 0)
+        
+        layout_btn = Gtk.Button(label=_("Change"))
+        layout_btn.connect("clicked", lambda x: self.change_keyboard_layout())
+        layout_row.pack_start(layout_btn, False, False, 0)
+        
+        box.pack_start(layout_row, False, False, 0)
+        
+        # Model row
+        model_row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        
+        model_label = Gtk.Label(label=_("Model:"))
+        model_label.set_halign(Gtk.Align.START)
+        model_label.set_width_chars(15)
+        model_row.pack_start(model_label, False, False, 0)
+        
+        self.kb_model_value = Gtk.Label()
+        self.kb_model_value.set_halign(Gtk.Align.START)
+        self.kb_model_value.set_selectable(True)
+        model_row.pack_start(self.kb_model_value, True, True, 0)
+        
+        model_btn = Gtk.Button(label=_("Change"))
+        model_btn.connect("clicked", lambda x: self.change_keyboard_model())
+        model_row.pack_start(model_btn, False, False, 0)
+        
+        box.pack_start(model_row, False, False, 0)
+        
+        return frame
+    
+    def create_timezone_section(self):
+        """Create timezone section"""
+        frame = Gtk.Frame()
+        frame.set_label(_("Timezone Settings"))
+        frame.set_shadow_type(Gtk.ShadowType.IN)
+        
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_margin_top(15)
+        box.set_margin_bottom(15)
+        box.set_margin_start(15)
+        box.set_margin_end(15)
+        frame.add(box)
+        
+        # Timezone row
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        
+        label = Gtk.Label(label=_("Current Timezone:"))
+        label.set_halign(Gtk.Align.START)
+        row.pack_start(label, False, False, 0)
+        
+        self.tz_value = Gtk.Label()
+        self.tz_value.set_halign(Gtk.Align.START)
+        self.tz_value.set_selectable(True)
+        row.pack_start(self.tz_value, True, True, 0)
+        
+        btn = Gtk.Button(label=_("Change"))
+        btn.connect("clicked", lambda x: self.change_timezone())
+        row.pack_start(btn, False, False, 0)
+        
+        box.pack_start(row, False, False, 0)
+        
+        return frame
+    
+    def create_environment_section(self):
+        """Create environment settings section"""
+        frame = Gtk.Frame()
+        frame.set_label(_("Advanced Options"))
+        frame.set_shadow_type(Gtk.ShadowType.IN)
+        
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
+        box.set_margin_top(15)
+        box.set_margin_bottom(15)
+        box.set_margin_start(15)
+        box.set_margin_end(15)
+        frame.add(box)
+        
+        # Environment toggle row
+        row = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        
+        label_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3)
+        
+        label = Gtk.Label(label=_("Modify /etc/environment"))
+        label.set_halign(Gtk.Align.START)
+        label_box.pack_start(label, False, False, 0)
+        
+        sublabel = Gtk.Label()
+        sublabel.set_markup("<span size='small' style='italic'>" + 
+                           _("Enable for compatibility with legacy applications") + "</span>")
+        sublabel.set_halign(Gtk.Align.START)
+        sublabel.set_opacity(0.7)
+        label_box.pack_start(sublabel, False, False, 0)
+        
+        row.pack_start(label_box, True, True, 0)
+        
+        self.env_switch = Gtk.Switch()
+        self.env_switch.set_active(False)
+        self.env_switch.set_valign(Gtk.Align.CENTER)
+        row.pack_start(self.env_switch, False, False, 0)
+        
+        box.pack_start(row, False, False, 0)
+        
+        return frame
+    
+    def create_console(self):
+        """Create console output section"""
+        frame = Gtk.Frame()
+        frame.set_label(_("Console Output"))
+        frame.set_shadow_type(Gtk.ShadowType.IN)
+        
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_min_content_height(150)
+        scrolled.set_margin_top(10)
+        scrolled.set_margin_bottom(10)
+        scrolled.set_margin_start(10)
+        scrolled.set_margin_end(10)
+        frame.add(scrolled)
+        
+        self.console_textview = Gtk.TextView()
+        self.console_textview.set_editable(False)
+        self.console_textview.set_cursor_visible(False)
+        self.console_textview.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
+        self.console_textview.set_monospace(True)
+        self.console_buffer = self.console_textview.get_buffer()
+        scrolled.add(self.console_textview)
+        
+        return frame
+    
+    def create_action_bar(self):
+        """Create action buttons bar"""
+        box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        box.set_margin_top(15)
+        box.set_margin_bottom(15)
+        box.set_margin_start(30)
+        box.set_margin_end(30)
+        
+        # Exit button
+        exit_btn = Gtk.Button(label=_("Exit"))
+        exit_btn.connect("clicked", lambda x: self.on_close())
+        box.pack_start(exit_btn, False, False, 0)
+        
+        # Spacer
+        box.pack_start(Gtk.Box(), True, True, 0)
+        
+        # Apply button
+        apply_btn = Gtk.Button(label=_("Generate and Apply Settings"))
+        apply_btn.get_style_context().add_class('suggested-action')
+        apply_btn.connect("clicked", lambda x: self.generate_and_apply())
+        box.pack_end(apply_btn, False, False, 0)
+        
+        return box
+    
+    def load_locale_descriptions(self):
+        """Load locale descriptions"""
+        descriptions = {}
+        try:
+            list_path = Path("/usr/local/locale-essora/list.txt")
+            if list_path.exists():
+                with list_path.open() as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#'):
+                            parts = line.split('#', 1)
+                            if len(parts) == 2:
+                                locale = parts[0].strip()
+                                description = parts[1].strip()
+                                descriptions[locale] = description
+            
+            with open('/usr/share/i18n/SUPPORTED') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        locale = line.split()[0]
+                        if locale.endswith('.UTF-8') and locale not in descriptions:
+                            descriptions[locale] = locale
+        except Exception as e:
+            print(f"Error loading locale descriptions: {e}")
+        return descriptions
+    
+    def ensure_locale_symlink(self):
+        """Ensure /etc/default/locale symlink exists"""
+        default_locale = Path("/etc/default/locale")
+        if not default_locale.exists():
+            try:
+                self.run_as_root(['ln', '-s', '/etc/locale.conf', '/etc/default/locale'])
+            except Exception as e:
+                self.log_error(f"Error creating symlink: {e}")
+    
+    def load_locale_settings(self):
+        """Load locale settings"""
+        settings = {}
+        try:
+            if self.locale_conf.exists():
+                with self.locale_conf.open() as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and '=' in line and not line.startswith('#'):
+                            key, value = line.split('=', 1)
+                            settings[key.strip()] = value.strip(' "\'')
+            
+            if 'LANG' not in settings:
+                result = subprocess.run(['locale'], capture_output=True, text=True)
+                for line in result.stdout.split('\n'):
+                    if line.startswith('LANG='):
+                        settings['LANG'] = line.split('=', 1)[1].strip(' "\'')
+                        break
+        except Exception as e:
+            print(f"Error loading locale settings: {e}")
+        
+        if 'LANG' not in settings:
+            settings['LANG'] = 'Not set'
+        
+        return settings
+    
+    def load_keyboard_settings(self):
+        """Load keyboard settings"""
+        settings = {
+            'XKBMODEL': 'pc105',
+            'XKBLAYOUT': 'us',
+            'XKBVARIANT': '',
+            'XKBOPTIONS': ''
+        }
+        
+        try:
+            if self.keyboard_config.exists():
+                with self.keyboard_config.open() as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and '=' in line and not line.startswith('#'):
+                            key, value = line.split('=', 1)
+                            settings[key.strip()] = value.strip(' "\'')
+        except Exception as e:
+            print(f"Error loading keyboard settings: {e}")
+        
+        return settings
+    
+    def load_environment_settings(self):
+        """Load environment settings"""
+        settings = {}
+        try:
+            if self.environment_file.exists():
+                with self.environment_file.open() as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and '=' in line and not line.startswith('#'):
+                            key, value = line.split('=', 1)
+                            key = key.strip()
+                            if not key.startswith('LANG') and not key.startswith('LC_'):
+                                settings[key] = value.strip(' "\'')
+        except Exception as e:
+            print(f"Error loading environment settings: {e}")
+        
+        return settings
+    
+    def get_current_timezone(self):
+        """Get current timezone"""
+        try:
+            if self.timezone_file.exists():
+                with self.timezone_file.open() as f:
+                    return f.read().strip()
+        except:
+            pass
+        
+        try:
+            result = subprocess.run(['timedatectl', 'show', '-p', 'Timezone', '--value'],
+                                  capture_output=True, text=True)
+            if result.returncode == 0:
+                return result.stdout.strip()
+        except:
+            pass
+        
+        return 'UTC'
+    
+    def update_display(self):
+        """Update display with current settings"""
+        # Language
+        current_lang = self.current_settings.get('LANG', 'Not set')
+        display_text = current_lang
+        if current_lang != 'Not set' and current_lang in self.locale_descriptions:
+            display_text += f" ({self.locale_descriptions[current_lang]})"
+        self.lang_value.set_text(display_text)
+        
+        # Keyboard
+        self.kb_layout_value.set_text(self.keyboard_settings.get('XKBLAYOUT', 'Not set'))
+        self.kb_model_value.set_text(self.keyboard_settings.get('XKBMODEL', 'Not set'))
+        
+        # Timezone
+        self.tz_value.set_text(self.current_timezone)
+    
+    def change_system_lang(self):
+        """Show dialog to change system language"""
+        dialog = Gtk.Dialog(title=_("Select System Language"), parent=self, flags=0)
+        dialog.set_default_size(700, 500)
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OK, Gtk.ResponseType.OK
+        )
+        
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        box.set_margin_top(10)
+        box.set_margin_bottom(10)
+        box.set_margin_start(10)
+        box.set_margin_end(10)
+        
+        # Search entry
+        search_entry = Gtk.SearchEntry()
+        search_entry.set_placeholder_text(_("Search languages..."))
+        box.pack_start(search_entry, False, False, 0)
+        
+        # Scrolled window
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_min_content_height(350)
+        box.pack_start(scrolled, True, True, 0)
+        
+        # TreeView
+        liststore = Gtk.ListStore(str, str)
+        treeview = Gtk.TreeView(model=liststore)
+        
+        # Locale column
+        renderer = Gtk.CellRendererText()
+        column = Gtk.TreeViewColumn(_("Locale"), renderer, text=0)
+        column.set_sort_column_id(0)
+        treeview.append_column(column)
+        
+        # Description column
+        renderer2 = Gtk.CellRendererText()
+        column2 = Gtk.TreeViewColumn(_("Description"), renderer2, text=1)
+        column2.set_sort_column_id(1)
+        treeview.append_column(column2)
+        
+        scrolled.add(treeview)
+        
+        # Populate list
+        locales = sorted(self.locale_descriptions.items())
+        for locale, description in locales:
+            liststore.append([locale, description])
+        
+        # Search function
+        def on_search_changed(entry):
+            search_text = entry.get_text().lower()
+            liststore.clear()
+            for locale, description in locales:
+                if search_text in locale.lower() or search_text in description.lower():
+                    liststore.append([locale, description])
+        
+        search_entry.connect("search-changed", on_search_changed)
+        
+        dialog.show_all()
+        response = dialog.run()
+        
+        if response == Gtk.ResponseType.OK:
+            selection = treeview.get_selection()
+            model, treeiter = selection.get_selected()
+            if treeiter:
+                selected_locale = model[treeiter][0]
+                self.current_settings['LANG'] = selected_locale
+                for key in ['LC_ALL', 'LC_ADDRESS', 'LC_IDENTIFICATION', 'LC_MEASUREMENT',
+                           'LC_MONETARY', 'LC_NAME', 'LC_NUMERIC', 'LC_PAPER',
+                           'LC_TELEPHONE', 'LC_TIME']:
+                    self.current_settings[key] = selected_locale
+                self.update_display()
+                self.log_output(_("Language changed to: {locale}").format(locale=selected_locale))
+        
+        dialog.destroy()
+    
+    def change_keyboard_layout(self):
+        """Show dialog to change keyboard layout"""
+        dialog = Gtk.Dialog(title=_("Select Keyboard Layout"), parent=self, flags=0)
+        dialog.set_default_size(500, 500)
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OK, Gtk.ResponseType.OK
+        )
+        
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        box.set_margin_top(10)
+        box.set_margin_bottom(10)
+        box.set_margin_start(10)
+        box.set_margin_end(10)
+        
+        # Search entry
+        search_entry = Gtk.SearchEntry()
+        search_entry.set_placeholder_text(_("Search layouts..."))
+        box.pack_start(search_entry, False, False, 0)
+        
+        # Scrolled window
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_min_content_height(350)
+        box.pack_start(scrolled, True, True, 0)
+        
+        # TreeView
+        liststore = Gtk.ListStore(str)
+        treeview = Gtk.TreeView(model=liststore)
+        treeview.set_headers_visible(True)
+        
+        renderer = Gtk.CellRendererText()
+        column = Gtk.TreeViewColumn(_("Layout"), renderer, text=0)
+        treeview.append_column(column)
+        
+        scrolled.add(treeview)
+        
+        # Get layouts
+        layouts = self.get_keyboard_layouts()
+        for layout in sorted(layouts):
+            liststore.append([layout])
+        
+        # Search function
+        def on_search_changed(entry):
+            search_text = entry.get_text().lower()
+            liststore.clear()
+            for layout in sorted(layouts):
+                if search_text in layout.lower():
+                    liststore.append([layout])
+        
+        search_entry.connect("search-changed", on_search_changed)
+        
+        dialog.show_all()
+        response = dialog.run()
+        
+        if response == Gtk.ResponseType.OK:
+            selection = treeview.get_selection()
+            model, treeiter = selection.get_selected()
+            if treeiter:
+                selected_layout = model[treeiter][0]
+                self.keyboard_settings['XKBLAYOUT'] = selected_layout
+                self.update_display()
+                self.log_output(_("Keyboard layout changed to: {layout}").format(layout=selected_layout))
+        
+        dialog.destroy()
+    
+    def change_keyboard_model(self):
+        """Show dialog to change keyboard model"""
+        dialog = Gtk.Dialog(title=_("Select Keyboard Model"), parent=self, flags=0)
+        dialog.set_default_size(500, 500)
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OK, Gtk.ResponseType.OK
+        )
+        
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        box.set_margin_top(10)
+        box.set_margin_bottom(10)
+        box.set_margin_start(10)
+        box.set_margin_end(10)
+        
+        # Search entry
+        search_entry = Gtk.SearchEntry()
+        search_entry.set_placeholder_text(_("Search models..."))
+        box.pack_start(search_entry, False, False, 0)
+        
+        # Scrolled window
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_min_content_height(350)
+        box.pack_start(scrolled, True, True, 0)
+        
+        # TreeView
+        liststore = Gtk.ListStore(str)
+        treeview = Gtk.TreeView(model=liststore)
+        treeview.set_headers_visible(True)
+        
+        renderer = Gtk.CellRendererText()
+        column = Gtk.TreeViewColumn(_("Model"), renderer, text=0)
+        treeview.append_column(column)
+        
+        scrolled.add(treeview)
+        
+        # Get models
+        models = self.get_keyboard_models()
+        for model in sorted(models):
+            liststore.append([model])
+        
+        # Search function
+        def on_search_changed(entry):
+            search_text = entry.get_text().lower()
+            liststore.clear()
+            for model in sorted(models):
+                if search_text in model.lower():
+                    liststore.append([model])
+        
+        search_entry.connect("search-changed", on_search_changed)
+        
+        dialog.show_all()
+        response = dialog.run()
+        
+        if response == Gtk.ResponseType.OK:
+            selection = treeview.get_selection()
+            model, treeiter = selection.get_selected()
+            if treeiter:
+                selected_model = model[treeiter][0]
+                self.keyboard_settings['XKBMODEL'] = selected_model
+                self.update_display()
+                self.log_output(_("Keyboard model changed to: {model}").format(model=selected_model))
+        
+        dialog.destroy()
+    
+    def change_timezone(self):
+        """Show dialog to change timezone"""
+        dialog = Gtk.Dialog(title=_("Select Timezone"), parent=self, flags=0)
+        dialog.set_default_size(600, 500)
+        dialog.add_buttons(
+            Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+            Gtk.STOCK_OK, Gtk.ResponseType.OK
+        )
+        
+        box = dialog.get_content_area()
+        box.set_spacing(10)
+        box.set_margin_top(10)
+        box.set_margin_bottom(10)
+        box.set_margin_start(10)
+        box.set_margin_end(10)
+        
+        # Search entry
+        search_entry = Gtk.SearchEntry()
+        search_entry.set_placeholder_text(_("Search timezones..."))
+        box.pack_start(search_entry, False, False, 0)
+        
+        # Scrolled window
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.set_min_content_height(350)
+        box.pack_start(scrolled, True, True, 0)
+        
+        # TreeView
+        liststore = Gtk.ListStore(str)
+        treeview = Gtk.TreeView(model=liststore)
+        treeview.set_headers_visible(True)
+        
+        renderer = Gtk.CellRendererText()
+        column = Gtk.TreeViewColumn(_("Timezone"), renderer, text=0)
+        treeview.append_column(column)
+        
+        scrolled.add(treeview)
+        
+        # Get timezones
+        timezones = self.get_timezones()
+        for tz in sorted(timezones):
+            liststore.append([tz])
+        
+        # Search function
+        def on_search_changed(entry):
+            search_text = entry.get_text().lower()
+            liststore.clear()
+            for tz in sorted(timezones):
+                if search_text in tz.lower():
+                    liststore.append([tz])
+        
+        search_entry.connect("search-changed", on_search_changed)
+        
+        dialog.show_all()
+        response = dialog.run()
+        
+        if response == Gtk.ResponseType.OK:
+            selection = treeview.get_selection()
+            model, treeiter = selection.get_selected()
+            if treeiter:
+                selected_tz = model[treeiter][0]
+                self.current_timezone = selected_tz
+                self.update_display()
+                self.log_output(_("Timezone changed to: {tz}").format(tz=selected_tz))
+        
+        dialog.destroy()
+    
+    def get_keyboard_layouts(self):
+        """Get available keyboard layouts"""
+        layouts = []
+        try:
+            result = subprocess.run(['localectl', 'list-x11-keymap-layouts'],
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                layouts = result.stdout.strip().split('\n')
+        except:
+            layouts = ['us', 'es', 'fr', 'de', 'it', 'pt', 'ru', 'uk', 'jp', 'cn']
+        
+        return [l for l in layouts if l]
+    
+    def get_keyboard_models(self):
+        """Get available keyboard models"""
+        models = []
+        try:
+            result = subprocess.run(['localectl', 'list-x11-keymap-models'],
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                models = result.stdout.strip().split('\n')
+        except:
+            models = ['pc105', 'pc104', 'pc101', 'macintosh']
+        
+        return [m for m in models if m]
+    
+    def get_timezones(self):
+        """Get available timezones"""
+        timezones = []
+        try:
+            result = subprocess.run(['timedatectl', 'list-timezones'],
+                                  capture_output=True, text=True, timeout=5)
+            if result.returncode == 0:
+                timezones = result.stdout.strip().split('\n')
+        except:
+            zoneinfo_path = Path('/usr/share/zoneinfo')
+            if zoneinfo_path.exists():
+                for root, dirs, files in os.walk(zoneinfo_path):
+                    dirs[:] = [d for d in dirs if d not in ['right', 'posix', 'SystemV', 'Etc']]
+                    for file in files:
+                        if file[0].isupper():
+                            tz = os.path.join(root, file).replace(str(zoneinfo_path) + '/', '')
+                            timezones.append(tz)
+        
+        return sorted([tz for tz in timezones if tz and '/' in tz])
+    
+    def log_output(self, message):
+        """Log message to console"""
+        end_iter = self.console_buffer.get_end_iter()
+        self.console_buffer.insert(end_iter, message + "\n")
+        
+        mark = self.console_buffer.create_mark(None, end_iter, False)
+        self.console_textview.scroll_to_mark(mark, 0.0, True, 0.0, 1.0)
+    
+    def log_error(self, message):
+        """Log error message"""
+        self.log_output(f"ERROR: {message}")
+    
+    def run_as_root(self, command):
+        """Run command as root"""
+        try:
+            result = subprocess.run(command, capture_output=True, text=True, check=True)
+            if result.stdout:
+                self.log_output(result.stdout)
+            return True
+        except subprocess.CalledProcessError as e:
+            self.log_error(f"Command failed: {' '.join(command)}")
+            if e.stderr:
+                self.log_error(e.stderr)
+            return False
+        except Exception as e:
+            self.log_error(f"Error running command: {e}")
+            return False
+    
+    def generate_and_apply(self):
+        """Generate locales and apply all settings"""
+        dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=0,
+            message_type=Gtk.MessageType.QUESTION,
+            buttons=Gtk.ButtonsType.YES_NO,
+            text=_("Confirm Action")
+        )
+        dialog.format_secondary_text(
+            _("This will generate locales and apply all settings. Continue?")
+        )
+        response = dialog.run()
+        dialog.destroy()
+        
+        if response != Gtk.ResponseType.YES:
+            return
+        
+        self.log_output(_("Generating locales..."))
+        
+        # Prepare locale.gen
+        try:
+            locale_gen_content = []
+            if self.locale_gen.exists():
+                with self.locale_gen.open() as f:
+                    locale_gen_content = f.readlines()
+            
+            selected_locale = self.current_settings['LANG']
+            new_content = []
+            locale_found = False
+            
+            for line in locale_gen_content:
+                stripped = line.strip()
+                if stripped.startswith('#') and selected_locale in stripped:
+                    new_content.append(stripped[1:] + '\n')
+                    locale_found = True
+                elif selected_locale in stripped and not stripped.startswith('#'):
+                    new_content.append(line)
+                    locale_found = True
+                else:
+                    new_content.append(line)
+            
+            if not locale_found:
+                new_content.append(f"{selected_locale} UTF-8\n")
+            
+            with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp:
+                tmp.writelines(new_content)
+                self.temp_files.append(tmp.name)
+            
+            self.run_as_root(['cp', tmp.name, str(self.locale_gen)])
+            
+        except Exception as e:
+            self.log_error(f"Error preparing locale.gen: {e}")
+            return
+        
+        # Generate locales
+        if not self.run_as_root(['locale-gen']):
+            self.log_error(_("Failed to generate locales"))
+            return
+        
+        # Apply locale settings
+        self.log_output(_("Applying locale settings..."))
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp:
+                for key, value in self.current_settings.items():
+                    tmp.write(f'{key}="{value}"\n')
+                self.temp_files.append(tmp.name)
+            
+            self.run_as_root(['cp', tmp.name, str(self.locale_conf)])
+            
+            # Update /etc/environment if enabled
+            if self.env_switch.get_active():
+                self.log_output(_("Updating /etc/environment..."))
+                env_settings = self.environment_settings.copy()
+                env_settings.update(self.current_settings)
+                
+                with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp:
+                    for key, value in env_settings.items():
+                        tmp.write(f'{key}="{value}"\n')
+                    self.temp_files.append(tmp.name)
+                
+                self.run_as_root(['cp', tmp.name, str(self.environment_file)])
+            
+        except Exception as e:
+            self.log_error(f"Error applying locale settings: {e}")
+        
+        # Apply keyboard settings
+        self.log_output(_("Applying keyboard settings..."))
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp:
+                for key, value in self.keyboard_settings.items():
+                    tmp.write(f'{key}="{value}"\n')
+                self.temp_files.append(tmp.name)
+            
+            self.run_as_root(['cp', tmp.name, str(self.keyboard_config)])
+            
+            try:
+                self.run_as_root(['setupcon', '--keyboard-only', '--force'])
+            except:
+                pass
+            
+            # Configure X11
+            try:
+                xorg_conf = f"""Section "InputClass"
+    Identifier "system-keyboard"
+    MatchIsKeyboard "on"
+    Option "XkbLayout" "{self.keyboard_settings['XKBLAYOUT']}"
+    Option "XkbModel" "{self.keyboard_settings['XKBMODEL']}"
+EndSection
+"""
+                
+                with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.conf') as tmp:
+                    tmp.write(xorg_conf)
+                    self.temp_files.append(tmp.name)
+                
+                self.run_as_root(['mkdir', '-p', '/etc/X11/xorg.conf.d'])
+                self.run_as_root(['cp', tmp.name, '/etc/X11/xorg.conf.d/00-keyboard.conf'])
+            except:
+                pass
+            
+        except Exception as e:
+            self.log_error(f"Error applying keyboard settings: {e}")
+        
+        # Apply timezone
+        self.log_output(_("Applying timezone settings..."))
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', delete=False) as tmp:
+                tmp.write(self.current_timezone + '\n')
+                self.temp_files.append(tmp.name)
+            
+            self.run_as_root(['cp', tmp.name, str(self.timezone_file)])
+            
+            zoneinfo_path = f"/usr/share/zoneinfo/{self.current_timezone}"
+            if os.path.exists(zoneinfo_path):
+                self.run_as_root(['ln', '-sf', zoneinfo_path, '/etc/localtime'])
+            else:
+                self.log_error(_("Timezone file not found: {zoneinfo_path}").format(
+                    zoneinfo_path=zoneinfo_path))
+            
+        except Exception as e:
+            self.log_error(f"Error applying timezone settings: {e}")
+        
+        # Success
+        self.log_output(_("Settings applied successfully!"))
+        self.log_output(_("You may need to restart your session for all changes to take effect."))
+        
+        done_dialog = Gtk.MessageDialog(
+            transient_for=self,
+            flags=0,
+            message_type=Gtk.MessageType.INFO,
+            buttons=Gtk.ButtonsType.OK,
+            text=_("Completed")
+        )
+        done_dialog.format_secondary_text(_("Settings applied. You can continue the installation."))
+        done_dialog.run()
+        done_dialog.destroy()
+
+        self._force_quit = True
+        try:
+            self.close()
+        except Exception:
+            Gtk.main_quit()
+    
+    def on_close(self, *args):
+        # If we are closing after Apply, quit silently
+        if getattr(self, "_force_quit", False):
+            try:
+                Gtk.main_quit()
+            except Exception:
+                pass
+            return False
+
+        # Keep it simple: close without extra dialogs
+        try:
+            Gtk.main_quit()
+        except Exception:
+            pass
+        return False
+
+def main():
+    app = EssoraLocaleGTK()
+    app.show_all()
+    Gtk.main()
+
+if __name__ == "__main__":
+    main()

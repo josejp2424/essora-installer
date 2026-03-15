@@ -114,7 +114,7 @@ The installer is built entirely in Python 3 using GTK3 (via PyGObject), with no 
 Install the `.deb` package on the Essora Linux live ISO:
 
 ```bash
-sudo dpkg -i essora-installer_1.2.1-1_amd64.deb
+sudo dpkg -i essora-installer_1.2-1_amd64.deb
 ```
 
 Or launch directly from the application menu (the `.desktop` file is included).

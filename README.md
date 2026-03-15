@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="icons/essora-installer.png" width="128" alt="Essora Installer icon"/>
+  <img src="/usr/local/essora-installer/icons/essora-installer.png" width="128" alt="Essora Installer"/>
 </p>
 
 <h1 align="center">Essora Installer</h1>

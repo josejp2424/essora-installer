@@ -69,5 +69,15 @@
   "locked": "заблокирован",
   "unchanged": "без изменений",
   "(none)": "(нет)",
-  "Open Essora Locale": "Открыть Essora Locale"
+  "Open Essora Locale": "Открыть Essora Locale",
+  "Use whole disk (automatic partitioning)": "Использовать весь диск (автоматическое разбиение)",
+  "Disk:": "Диск:",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ ВСЕ ДАННЫЕ НА {disk} БУДУТ УДАЛЕНЫ!",
+  "Mode: Whole disk (automatic partitioning)": "Режим: Весь диск (автоматическое разбиение)",
+  "Target disk: {disk}": "Целевой диск: {disk}",
+  "Installation complete!": "Установка завершена!",
+  "Installation failed": "Ошибка установки",
+  "Menu": "Меню",
+  "Finished": "Завершено",
+  "Preparing installation...": "Подготовка к установке..."
 }

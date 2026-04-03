@@ -69,5 +69,15 @@
   "locked": "verrouillé",
   "unchanged": "inchangé",
   "(none)": "(aucun)",
-  "Open Essora Locale": "Ouvrir Essora Locale"
+  "Open Essora Locale": "Ouvrir Essora Locale",
+  "Use whole disk (automatic partitioning)": "Utiliser tout le disque (partitionnement automatique)",
+  "Disk:": "Disque :",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ TOUTES LES DONNÉES SUR {disk} SERONT EFFACÉES !",
+  "Mode: Whole disk (automatic partitioning)": "Mode : Disque entier (partitionnement automatique)",
+  "Target disk: {disk}": "Disque cible : {disk}",
+  "Installation complete!": "Installation terminée !",
+  "Installation failed": "Échec de l'installation",
+  "Menu": "Menu",
+  "Finished": "Terminé",
+  "Preparing installation...": "Préparation de l'installation..."
 }

@@ -40,6 +40,9 @@ from translations import Translator
 
 APP_TITLE = "Essora Installer"
 ICON_PATH = "/usr/local/essora-installer/icons/essora-installer.png"
+FINISH_ICON_PATH = "/usr/local/essora-installer/icons/essora-installer-final.png"
+CORNER_ICON_PATH = "/usr/local/essora-installer/icons/essora-installer2.png"
+BANNERS_DIR = "/usr/local/essora-installer/banners"
 LANG_DIR = "/usr/local/essora-installer/lang"
 ZONEINFO_DIR = "/usr/share/zoneinfo"
 EVDEV_LST = "/usr/share/X11/xkb/rules/evdev.lst"
@@ -85,6 +88,7 @@ def load_backend_module():
 _backend = load_backend_module()
 list_partitions = _backend.list_partitions
 list_disks = _backend.list_disks
+partition_whole_disk = _backend.partition_whole_disk
 is_uefi_firmware = _backend.is_uefi_firmware
 parent_disk = _backend.parent_disk
 InstallPlan = _backend.InstallPlan
@@ -99,7 +103,7 @@ def load_scaled_pixbuf(path: str, max_w: int, max_h: int):
         w, h = pb.get_width(), pb.get_height()
         if w <= 0 or h <= 0:
             return pb
-        scale = min(max_w / w, max_h / h, 1.0)
+        scale = min(max_w / w, max_h / h)
         nw, nh = int(w * scale), int(h * scale)
         if nw <= 0 or nh <= 0:
             return pb
@@ -111,7 +115,7 @@ def load_scaled_pixbuf(path: str, max_w: int, max_h: int):
 
 
 def make_corner_logo_widget(size_px: int = 96):
-    pb = load_scaled_pixbuf(ICON_PATH, size_px, size_px)
+    pb = load_scaled_pixbuf(CORNER_ICON_PATH, size_px, size_px)
     if not pb:
         return None
     img = Gtk.Image.new_from_pixbuf(pb)
@@ -372,6 +376,15 @@ class Installer(Gtk.Assistant):
         self.apply_translations()
 
     def _quit(self, *_):
+        try:
+            current = self.get_current_page()
+            total = self.get_n_pages()
+            if current == total - 1:  
+                if getattr(self, "chk_reboot", None) and self.chk_reboot.get_active():
+                    self._on_reboot_clicked()
+                    return
+        except Exception:
+            pass
         self.destroy()
         Gtk.main_quit()
 
@@ -449,8 +462,9 @@ class Installer(Gtk.Assistant):
         self.set_page_title(self.page_confirm, self.tr("Confirmation"))
         self.set_page_title(self.page_install, self.tr("Installing"))
         self.set_page_title(self.page_finish, self.tr("Finished"))
+        self.chk_whole_disk.set_label(self.tr("Use whole disk (automatic partitioning)"))
+        self.lbl_whole_disk_target.set_text(self.tr("Disk:"))
         self.lbl_finish_title.set_markup(f"<b><big>{self.tr('Installation complete!')}</big></b>")
-        self.lbl_finish_log.set_markup(f"<b>{self.tr('Installation log:')}</b>")
         self.lbl_btn_reboot.set_text(self.tr("Reboot now"))
 
         self.lbl_welcome_title.set_markup(f"<b>{self.tr('Welcome to Essora Installer')}</b>")
@@ -660,7 +674,6 @@ class Installer(Gtk.Assistant):
         self.lbl_welcome_body = Gtk.Label(xalign=0); self.lbl_welcome_body.set_line_wrap(True)
         self.lbl_welcome_warn = Gtk.Label(xalign=0); self.lbl_welcome_warn.set_line_wrap(True)
 
-        # big image to avoid empty space
         big_img = None
         pb = load_scaled_pixbuf(ICON_PATH, 280, 280)
         if pb:
@@ -747,8 +760,32 @@ class Installer(Gtk.Assistant):
         topbar.pack_start(self.btn_gparted, False, False, 0)
         c.pack_start(topbar, False, False, 0)
 
+        # ── Whole disk mode ──────────────────────────────────────────────
+        self.chk_whole_disk = Gtk.CheckButton()
+        self.chk_whole_disk.set_active(False)
+        c.pack_start(self.chk_whole_disk, False, False, 0)
+
+        whole_disk_grid = Gtk.Grid(column_spacing=12, row_spacing=6)
+        c.pack_start(whole_disk_grid, False, False, 0)
+        self.lbl_whole_disk_target = Gtk.Label(xalign=0)
+        whole_disk_grid.attach(self.lbl_whole_disk_target, 0, 0, 1, 1)
+        self.cmb_whole_disk = Gtk.ComboBoxText()
+        whole_disk_grid.attach(self.cmb_whole_disk, 1, 0, 1, 1)
+        self.lbl_whole_disk_warn = Gtk.Label(xalign=0)
+        self.lbl_whole_disk_warn.set_line_wrap(True)
+        whole_disk_grid.attach(self.lbl_whole_disk_warn, 0, 1, 2, 1)
+
+        sep_whole = Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL)
+        c.pack_start(sep_whole, False, False, 4)
+
+        # Manual partition controls 
+        self.manual_disk_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        c.pack_start(self.manual_disk_box, False, False, 0)
+
+        self.chk_whole_disk.connect("toggled", self._on_whole_disk_toggled)
+
         grid3 = Gtk.Grid(column_spacing=12, row_spacing=10)
-        c.pack_start(grid3, False, False, 0)
+        self.manual_disk_box.pack_start(grid3, False, False, 0)
 
         self.lbl_efi = Gtk.Label(xalign=0)
         grid3.attach(self.lbl_efi, 0, 0, 1, 1)
@@ -764,28 +801,28 @@ class Installer(Gtk.Assistant):
         self.chk_format = Gtk.CheckButton()
         self.chk_format.set_active(False)
         self.chk_format.connect("toggled", lambda *_: self.cmb_fs.set_sensitive(bool(self.chk_format.get_active())))
-        c.pack_start(self.chk_format, False, False, 0)
+        self.manual_disk_box.pack_start(self.chk_format, False, False, 0)
 
         fsgrid = Gtk.Grid(column_spacing=12, row_spacing=10)
-        c.pack_start(fsgrid, False, False, 0)
+        self.manual_disk_box.pack_start(fsgrid, False, False, 0)
         self.lbl_fs = Gtk.Label(xalign=0)
         fsgrid.attach(self.lbl_fs, 0, 0, 1, 1)
         self.cmb_fs = Gtk.ComboBoxText()
         self.cmb_fs.append_text("ext4")
         self.cmb_fs.append_text("ext3")
-        self.cmb_fs.set_active(0)  
+        self.cmb_fs.set_active(0)
         self.cmb_fs.set_sensitive(False)
         fsgrid.attach(self.cmb_fs, 1, 0, 1, 1)
 
         self.lbl_label = Gtk.Label(xalign=0)
-        c.pack_start(self.lbl_label, False, False, 0)
+        self.manual_disk_box.pack_start(self.lbl_label, False, False, 0)
 
         self.chk_grub = Gtk.CheckButton()
         self.chk_grub.set_active(True)
-        c.pack_start(self.chk_grub, False, False, 0)
+        self.manual_disk_box.pack_start(self.chk_grub, False, False, 0)
 
         grid4 = Gtk.Grid(column_spacing=12, row_spacing=10)
-        c.pack_start(grid4, False, False, 0)
+        self.manual_disk_box.pack_start(grid4, False, False, 0)
         self.lbl_grubdisk = Gtk.Label(xalign=0)
         grid4.attach(self.lbl_grubdisk, 0, 0, 1, 1)
         self.cmb_grubdisk = Gtk.ComboBoxText()
@@ -891,157 +928,141 @@ class Installer(Gtk.Assistant):
         self.set_page_type(self.page_confirm, Gtk.AssistantPageType.CONFIRM)
         self.set_page_complete(self.page_confirm, False)
 
-        # Installing
-        c = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin=16)
+        install_overlay = Gtk.Overlay()
 
-        # Top row: Spinner + current operation label
-        hbox_op = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
+        # Banner image fills the background
+        self._inst_banner_paths = []
+        self._inst_banner_index = 0
+        self._inst_banner_source_id = None
+        if os.path.isdir(BANNERS_DIR):
+            for fn in sorted(os.listdir(BANNERS_DIR)):
+                if fn.lower().endswith((".png", ".jpg", ".jpeg", ".bmp")):
+                    self._inst_banner_paths.append(os.path.join(BANNERS_DIR, fn))
+        self.inst_banner_img = Gtk.Image()
+        self.inst_banner_img.set_halign(Gtk.Align.FILL)
+        self.inst_banner_img.set_valign(Gtk.Align.FILL)
+        self.inst_banner_img.set_hexpand(True)
+        self.inst_banner_img.set_vexpand(True)
+        install_overlay.add(self.inst_banner_img)
+
+        bottom_bar = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin=8)
+        bottom_bar.set_halign(Gtk.Align.FILL)
+        bottom_bar.set_valign(Gtk.Align.END)
+
+        hbox_op = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.spinner = Gtk.Spinner()
-        self.spinner.set_size_request(22, 22)
+        self.spinner.set_size_request(18, 18)
         hbox_op.pack_start(self.spinner, False, False, 0)
         self.lbl_current_op = Gtk.Label(xalign=0)
         self.lbl_current_op.set_markup("<b>Preparing installation...</b>")
-        self.lbl_current_op.set_ellipsize(3)  
+        self.lbl_current_op.set_ellipsize(3)
         hbox_op.pack_start(self.lbl_current_op, True, True, 0)
-        c.pack_start(hbox_op, False, False, 0)
+        bottom_bar.pack_start(hbox_op, False, False, 0)
 
-        # Progress bar
         self.pbar = Gtk.ProgressBar(show_text=True)
         self.pbar.set_text("0%")
         self.pbar.set_show_text(True)
-        c.pack_start(self.pbar, False, False, 0)
+        bottom_bar.pack_start(self.pbar, False, False, 0)
 
-        # Etiqueta terminal
-        lbl_console = Gtk.Label(xalign=0)
-        lbl_console.set_markup("<b>Console output:</b>")
-        c.pack_start(lbl_console, False, False, 0)
+        install_overlay.add_overlay(bottom_bar)
 
-        # Log TextView with terminal style
-        sc2 = Gtk.ScrolledWindow()
-        sc2.set_vexpand(True)
-        sc2.set_shadow_type(Gtk.ShadowType.IN)
         self.output = Gtk.TextView(editable=False, monospace=True)
-        self.output.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        self.output.set_left_margin(6)
-        self.output.set_right_margin(6)
-        self.output.set_top_margin(4)
-        self.output.set_bottom_margin(4)
-        try:
-            _css = b"""
-            textview#install_console {
-                background-color: #1e1e2e;
-                color: #cdd6f4;
-            }
-            textview#install_console text {
-                background-color: #1e1e2e;
-                color: #cdd6f4;
-            }
-            """
-            _prov = Gtk.CssProvider()
-            _prov.load_from_data(_css)
-            self.output.set_name("install_console")
-            self.output.get_style_context().add_provider(
-                _prov, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-            )
-        except Exception:
-            pass
-        sc2.add(self.output)
-        c.pack_start(sc2, True, True, 0)
 
-        self.page_install = wrap_with_corner_logo(c)
+        self.page_install = wrap_with_corner_logo(install_overlay)
         self.append_page(self.page_install)
         self.set_page_type(self.page_install, Gtk.AssistantPageType.CONTENT)
         self.set_page_complete(self.page_install, False)
 
-        # Final page / summary
-        fin = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=16, margin=24)
+        fin = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
 
-        # Icon + title
-        hbox_title = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=12)
-        self.lbl_finish_icon = Gtk.Label()
-        self.lbl_finish_icon.set_markup("<span font='36'>🎉</span>")
-        hbox_title.pack_start(self.lbl_finish_icon, False, False, 0)
+        self._fin_banner_paths = []
+        self._fin_banner_index = 0
+        self._fin_banner_source_id = None
+        if os.path.isdir(BANNERS_DIR):
+            for fn in sorted(os.listdir(BANNERS_DIR)):
+                if fn.lower().endswith((".png", ".jpg", ".jpeg", ".bmp")):
+                    self._fin_banner_paths.append(os.path.join(BANNERS_DIR, fn))
+        self.fin_banner_img = Gtk.Image()
+        self.fin_banner_img.set_halign(Gtk.Align.CENTER)
+        self.fin_banner_img.set_size_request(-1, 260)
+        fin.pack_start(self.fin_banner_img, False, False, 0)
+
+        # Info area
+        info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin=20)
+        fin.pack_start(info, True, True, 0)
+
         self.lbl_finish_title = Gtk.Label()
         self.lbl_finish_title.set_markup("<b><big>Installation complete!</big></b>")
-        self.lbl_finish_title.set_xalign(0)
-        hbox_title.pack_start(self.lbl_finish_title, True, True, 0)
-        fin.pack_start(hbox_title, False, False, 0)
+        self.lbl_finish_title.set_halign(Gtk.Align.CENTER)
+        info.pack_start(self.lbl_finish_title, False, False, 0)
 
-        # Progress bar al 100%
+        self.lbl_finish_sub = Gtk.Label()
+        self.lbl_finish_sub.set_text(self.tr("You can now reboot into the new system."))
+        self.lbl_finish_sub.set_halign(Gtk.Align.CENTER)
+        self.lbl_finish_sub.get_style_context().add_class("dim-label")
+        info.pack_start(self.lbl_finish_sub, False, False, 0)
+
+        self.chk_reboot = Gtk.CheckButton()
+        self.lbl_btn_reboot = Gtk.Label(label=self.tr("Restart system now"))
+        self.chk_reboot.add(self.lbl_btn_reboot)
+        self.chk_reboot.set_active(True)
+        self.chk_reboot.set_halign(Gtk.Align.CENTER)
+        self.chk_reboot.connect("toggled", lambda *_: None)
+        info.pack_start(self.chk_reboot, False, False, 0)
+
+        # Progress bar at 100%
         self.pbar_finish = Gtk.ProgressBar(show_text=True)
         self.pbar_finish.set_fraction(1.0)
         self.pbar_finish.set_text("100% ✓")
         fin.pack_start(self.pbar_finish, False, False, 0)
 
-        # Shared log — same buffer as self.output
-        self.lbl_finish_log = Gtk.Label(xalign=0)
-        self.lbl_finish_log.set_markup("<b>Installation log:</b>")
-        fin.pack_start(self.lbl_finish_log, False, False, 0)
-
-        sc_finish = Gtk.ScrolledWindow()
-        sc_finish.set_vexpand(True)
-        sc_finish.set_shadow_type(Gtk.ShadowType.IN)
+        # Hidden output_finish — log buffer
         self.output_finish = Gtk.TextView(editable=False, monospace=True)
-        self.output_finish.set_wrap_mode(Gtk.WrapMode.WORD_CHAR)
-        self.output_finish.set_left_margin(6)
-        self.output_finish.set_right_margin(6)
-        self.output_finish.set_top_margin(4)
-        self.output_finish.set_bottom_margin(4)
-        try:
-            _css2 = b"""
-            textview#finish_console {
-                background-color: #1e1e2e;
-                color: #cdd6f4;
-            }
-            textview#finish_console text {
-                background-color: #1e1e2e;
-                color: #cdd6f4;
-            }
-            """
-            _prov2 = Gtk.CssProvider()
-            _prov2.load_from_data(_css2)
-            self.output_finish.set_name("finish_console")
-            self.output_finish.get_style_context().add_provider(
-                _prov2, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
-            )
-        except Exception:
-            pass
-        sc_finish.add(self.output_finish)
-        fin.pack_start(sc_finish, True, True, 0)
-        btn_reboot = Gtk.Button()
-        btn_reboot.set_relief(Gtk.ReliefStyle.NORMAL)
-        btn_reboot.set_size_request(200, 44)
-        hbox_btn = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
-        hbox_btn.set_halign(Gtk.Align.CENTER)
-        hbox_btn.pack_start(Gtk.Image.new_from_icon_name("system-reboot", Gtk.IconSize.BUTTON), False, False, 0)
-        self.lbl_btn_reboot = Gtk.Label(label="Reboot now")
-        hbox_btn.pack_start(self.lbl_btn_reboot, False, False, 0)
-        btn_reboot.add(hbox_btn)
-        btn_reboot.get_style_context().add_class("suggested-action")
-        btn_reboot.connect("clicked", self._on_reboot_clicked)
-        btn_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL)
-        btn_box.set_halign(Gtk.Align.CENTER)
-        btn_box.pack_start(btn_reboot, False, False, 0)
-        fin.pack_start(btn_box, False, False, 8)
+        # lbl_finish_icon kept for compatibility
+        self.lbl_finish_icon = Gtk.Label()
+        self.lbl_finish_icon.set_no_show_all(True)
 
         self.page_finish = wrap_with_corner_logo(fin)
         self.append_page(self.page_finish)
         self.set_page_type(self.page_finish, Gtk.AssistantPageType.SUMMARY)
         self.set_page_complete(self.page_finish, True)
 
+    def _on_whole_disk_toggled(self, *_):
+        active = self.chk_whole_disk.get_active()
+        self.manual_disk_box.set_sensitive(not active)
+        self.manual_disk_box.set_visible(not active)
+        warn = ""
+        if active:
+            disk_txt = self.cmb_whole_disk.get_active_text() or ""
+            disk = disk_txt.split()[0].strip() if disk_txt.startswith("/dev/") else ""
+            if disk:
+                warn = self.tr("⚠ ALL DATA ON {disk} WILL BE ERASED!", disk=disk)
+        self.lbl_whole_disk_warn.set_markup(
+            f"<b><span foreground='red'>{warn}</span></b>" if warn else ""
+        )
+        self._disk_changed()
+
+    def get_whole_disk(self) -> str:
+        t = self.cmb_whole_disk.get_active_text() or ""
+        return t.split()[0].strip() if t.startswith("/dev/") else ""
+
     def refresh_partitions(self):
         self.part_rows = list_partitions()
         self.disk_rows = list_disks()
 
         self.cmb_grubdisk.remove_all()
+        self.cmb_whole_disk.remove_all()
         for d in self.disk_rows:
             path = d.get("path") or ""
             size = d.get("size") or ""
             model = d.get("model") or ""
             if path:
-                self.cmb_grubdisk.append_text(f"{path} ({size}) {model}".strip())
+                label = f"{path} ({size}) {model}".strip()
+                self.cmb_grubdisk.append_text(label)
+                self.cmb_whole_disk.append_text(label)
         if self.disk_rows:
             self.cmb_grubdisk.set_active(0)
+            self.cmb_whole_disk.set_active(0)
 
         uefi = is_uefi_firmware()
         efi_candidates = [p for p in self.part_rows if is_efi_candidate(p)]
@@ -1146,44 +1167,57 @@ class Installer(Gtk.Assistant):
         return ok
 
     def on_prepare(self, assistant, page):
+        if page == self.page_install:
+            self._start_banner_slideshow()
+            return
+        if page == self.page_finish:
+            
+            return
         if page == self.page_confirm:
-            root_dev = self.get_root_device()
-            efi_dev = self.get_efi_device()
+            whole_disk_mode = self.chk_whole_disk.get_active()
             tz = self.get_timezone_value()
-            fs = self.get_fs_value()
-            fmt = self.chk_format.get_active()
-
             kb_layout = self.get_kb_layout()
             kb_model = self.get_kb_model()
-            kb_variant = (getattr(self, "_kb_variant", "") or "").strip()
-            kb_options = (getattr(self, "_kb_options", "") or "").strip()
-
-            grub_disk = self.get_grub_disk()
             uefi = is_uefi_firmware()
             fw = "UEFI" if uefi else "BIOS/Legacy"
-
             root_pw = self.ent_root.get_text().strip()
             lock_root = self.chk_lock_root.get_active()
             root_status = self.tr("password set") if root_pw else (self.tr("locked") if lock_root else self.tr("unchanged"))
-
             yes = self.tr("yes"); no = self.tr("no")
-            grub_val = yes if self.chk_grub.get_active() else no
             none = self.tr("(none)")
-            efi_show = efi_dev if efi_dev else none
 
             lines = []
             lines.append(self.tr("Time zone: {tz}", tz=tz))
             lines.append(self.tr("Keyboard: layout={layout}, model={model}", layout=kb_layout, model=kb_model))
-
-            if fmt:
-                lines.append(self.tr("Root (/): {dev} (format: {yes}, fs: {fs}, label: essora)", dev=root_dev, yes=yes, fs=fs))
-            else:
-                lines.append(self.tr("Root (/): {dev} (format: {no})", dev=root_dev, no=no))
-
-            lines.append(self.tr("Boot/EFI (ESP): {dev}", dev=efi_show))
             lines.append(self.tr("Firmware: {fw}", fw=fw))
-            lines.append(self.tr("Install GRUB: {val}", val=grub_val))
-            lines.append(self.tr("GRUB disk: {dev}", dev=grub_disk))
+
+            if whole_disk_mode:
+                disk = self.get_whole_disk()
+                ram = _backend.get_ram_bytes()
+                swap_gb = _backend.calc_swap_size_bytes(ram) / 1024**3
+                lines.append(self.tr("Mode: Whole disk (automatic partitioning)"))
+                lines.append(self.tr("Target disk: {disk}", disk=disk or none))
+                lines.append(f"  EFI partition: 1024 MiB (FAT32)" if uefi else "  No EFI partition (BIOS mode)")
+                lines.append(f"  Swap: {swap_gb:.1f} GB")
+                lines.append(f"  Root (/): remaining space (ext4, label: essora)")
+                lines.append(self.tr("Install GRUB: {val}", val=yes))
+                lines.append(self.tr("GRUB disk: {dev}", dev=disk or none))
+            else:
+                root_dev = self.get_root_device()
+                efi_dev = self.get_efi_device()
+                grub_disk = self.get_grub_disk()
+                fs = self.get_fs_value()
+                fmt = self.chk_format.get_active()
+                grub_val = yes if self.chk_grub.get_active() else no
+                efi_show = efi_dev if efi_dev else none
+                if fmt:
+                    lines.append(self.tr("Root (/): {dev} (format: {yes}, fs: {fs}, label: essora)", dev=root_dev, yes=yes, fs=fs))
+                else:
+                    lines.append(self.tr("Root (/): {dev} (format: {no})", dev=root_dev, no=no))
+                lines.append(self.tr("Boot/EFI (ESP): {dev}", dev=efi_show))
+                lines.append(self.tr("Install GRUB: {val}", val=grub_val))
+                lines.append(self.tr("GRUB disk: {dev}", dev=grub_disk))
+
             lines.append(self.tr("Hostname: {host}", host=self.ent_host.get_text().strip()))
             lines.append(self.tr("Username: {user}", user=self.ent_user.get_text().strip()))
             lines.append(self.tr("Root: {status}", status=root_status))
@@ -1195,50 +1229,89 @@ class Installer(Gtk.Assistant):
     def on_apply(self, *_):
         self.set_current_page(5)
 
-        root_dev = self.get_root_device()
-        if not root_dev:
-            self.log("ERROR: No root partition selected.")
-            return
-
         uefi = is_uefi_firmware()
-        efi_dev = self.get_efi_device() or None
-        grub_disk = self.get_grub_disk() or parent_disk(root_dev)
+        whole_disk_mode = self.chk_whole_disk.get_active()
+        whole_disk = self.get_whole_disk() if whole_disk_mode else ""
 
         root_pw = self.ent_root.get_text().strip()
         lock_root = self.chk_lock_root.get_active()
         if root_pw and lock_root:
             lock_root = False
 
-        plan = InstallPlan(
-            root_part=root_dev,
-            efi_part=efi_dev,
-            format_root=self.chk_format.get_active(),
-            root_fstype=self.get_fs_value(),
-            timezone=self.get_timezone_value(),
-            hostname=self.ent_host.get_text().strip(),
-            username=self.ent_user.get_text().strip(),
-            password=self.ent_pass.get_text(),
-            root_password=root_pw,
-            lock_root=lock_root,
-            kb_layout=self.get_kb_layout(),
-            kb_model=self.get_kb_model(),
-            kb_variant=(getattr(self, "_kb_variant", "") or "").strip(),
-            kb_options=(getattr(self, "_kb_options", "") or "").strip(),
-            install_grub=self.chk_grub.get_active(),
-            grub_disk=grub_disk,
-            uefi=uefi,
-            slim_autologin=self.chk_slim_autologin.get_active(),
-        )
+        if whole_disk_mode:
+            if not whole_disk:
+                self.log("ERROR: No disk selected for whole-disk mode.")
+                return
+
+            plan = InstallPlan(
+                root_part="__WHOLE_DISK__",   
+                efi_part=None,
+                format_root=True,
+                root_fstype="ext4",
+                timezone=self.get_timezone_value(),
+                hostname=self.ent_host.get_text().strip(),
+                username=self.ent_user.get_text().strip(),
+                password=self.ent_pass.get_text(),
+                root_password=root_pw,
+                lock_root=lock_root,
+                kb_layout=self.get_kb_layout(),
+                kb_model=self.get_kb_model(),
+                kb_variant=(getattr(self, "_kb_variant", "") or "").strip(),
+                kb_options=(getattr(self, "_kb_options", "") or "").strip(),
+                install_grub=True,
+                grub_disk=whole_disk,
+                uefi=uefi,
+                slim_autologin=self.chk_slim_autologin.get_active(),
+                format_swap=True,
+            )
+        else:
+            root_dev = self.get_root_device()
+            if not root_dev:
+                self.log("ERROR: No root partition selected.")
+                return
+            efi_dev = self.get_efi_device() or None
+            grub_disk = self.get_grub_disk() or parent_disk(root_dev)
+            plan = InstallPlan(
+                root_part=root_dev,
+                efi_part=efi_dev,
+                format_root=self.chk_format.get_active(),
+                root_fstype=self.get_fs_value(),
+                timezone=self.get_timezone_value(),
+                hostname=self.ent_host.get_text().strip(),
+                username=self.ent_user.get_text().strip(),
+                password=self.ent_pass.get_text(),
+                root_password=root_pw,
+                lock_root=lock_root,
+                kb_layout=self.get_kb_layout(),
+                kb_model=self.get_kb_model(),
+                kb_variant=(getattr(self, "_kb_variant", "") or "").strip(),
+                kb_options=(getattr(self, "_kb_options", "") or "").strip(),
+                install_grub=self.chk_grub.get_active(),
+                grub_disk=grub_disk,
+                uefi=uefi,
+                slim_autologin=self.chk_slim_autologin.get_active(),
+            )
 
         self.set_sensitive(False)
         self.spinner.start()
         self._pulse_source_id = GLib.timeout_add(19000, self._rsync_tick)
+        self._screensaver_source_id = GLib.timeout_add(50000, self._inhibit_screensaver)
+        self._inhibit_screensaver()
+
+        _whole_disk = whole_disk  
 
         def worker():
             try:
                 def log_fn(m): GLib.idle_add(self.log, m)
                 def prog_fn(v): GLib.idle_add(self.set_progress, v)
                 log_fn("== Starting installation ==")
+                if whole_disk_mode:
+                    log_fn(f"── Partitioning whole disk {_whole_disk}...")
+                    parts = partition_whole_disk(_whole_disk, uefi, log_fn)
+                    plan.root_part = parts["root_part"]
+                    plan.efi_part  = parts["efi_part"]
+                    plan.swap_part = parts["swap_part"]
+                    plan.grub_disk = _whole_disk
                 do_install(plan, log_fn, prog_fn)
                 GLib.idle_add(self.log, "✅ Done. Reboot into the installed system.")
                 GLib.idle_add(self._show_finish_page, True)
@@ -1263,27 +1336,112 @@ class Installer(Gtk.Assistant):
             self.pbar_finish.set_text(f"{pct}%")
         return True
 
+    def _inhibit_screensaver(self) -> bool:
+        try:
+            import subprocess, os
+            env = os.environ.copy()
+            subprocess.Popen(
+                ["xdg-screensaver", "reset"],
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+
+            subprocess.Popen(
+                ["xset", "s", "reset"],
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except Exception:
+            pass
+        return True  
+
+    def _start_banner_slideshow(self):
+        """Start banners on the install page."""
+        if not self._inst_banner_paths:
+            return
+        self._inst_banner_index = 0
+        self._inst_banner_source_id = None
+        self._inst_render_banner()
+        self._inst_banner_source_id = GLib.timeout_add_seconds(8, self._inst_next_banner)
+
+    def _inst_render_banner(self):
+        if not self._inst_banner_paths:
+            return
+        try:
+            alloc = self.inst_banner_img.get_allocation()
+            w = alloc.width if alloc.width > 10 else 860
+            h = alloc.height if alloc.height > 10 else 400
+            pb = GdkPixbuf.Pixbuf.new_from_file(self._inst_banner_paths[self._inst_banner_index])
+            # Scale to fill width, preserve aspect
+            scale = w / pb.get_width()
+            nh = int(pb.get_height() * scale)
+            scaled = pb.scale_simple(w, max(nh, h), GdkPixbuf.InterpType.BILINEAR)
+            self.inst_banner_img.set_from_pixbuf(scaled)
+        except Exception as e:
+            print(f"[BANNER] {e}")
+
+    def _inst_next_banner(self) -> bool:
+        if not self._inst_banner_paths:
+            return False
+        self._inst_banner_index = (self._inst_banner_index + 1) % len(self._inst_banner_paths)
+        self._inst_render_banner()
+        return True
+
+    def _stop_banner_slideshow(self):
+        if getattr(self, "_inst_banner_source_id", None):
+            GLib.source_remove(self._inst_banner_source_id)
+            self._inst_banner_source_id = None
+
+    def _start_fin_banner(self):
+        """Start banners on the finish page."""
+        if not self._fin_banner_paths:
+            return
+        self._fin_banner_index = 0
+        self._fin_render_banner()
+        self._fin_banner_source_id = GLib.timeout_add_seconds(8, self._fin_next_banner)
+
+    def _fin_render_banner(self):
+        if not self._fin_banner_paths:
+            return
+        try:
+            pb = GdkPixbuf.Pixbuf.new_from_file(self._fin_banner_paths[self._fin_banner_index])
+            scaled = pb.scale_simple(600, 260, GdkPixbuf.InterpType.BILINEAR)
+            self.fin_banner_img.set_from_pixbuf(scaled)
+        except Exception as e:
+            print(f"[FIN BANNER] {e}")
+
+    def _fin_next_banner(self) -> bool:
+        if not self._fin_banner_paths:
+            return False
+        self._fin_banner_index = (self._fin_banner_index + 1) % len(self._fin_banner_paths)
+        self._fin_render_banner()
+        return True
+
     def _show_finish_page(self, success: bool):
         if hasattr(self, "_pulse_source_id") and self._pulse_source_id:
             GLib.source_remove(self._pulse_source_id)
             self._pulse_source_id = None
+        if hasattr(self, "_screensaver_source_id") and self._screensaver_source_id:
+            GLib.source_remove(self._screensaver_source_id)
+            self._screensaver_source_id = None
+        self._stop_banner_slideshow()
         self.spinner.stop()
-        buf = self.output_finish.get_buffer()
-        end_mark = buf.get_insert()
-        self.output_finish.scroll_to_mark(end_mark, 0.0, True, 0.0, 1.0)
 
         if success:
-            self.lbl_finish_icon.set_markup("<span font='36'>🎉</span>")
+            self.lbl_finish_title.set_markup(f"<b><big>{self.tr('Installation complete!')}</big></b>")
+            self.lbl_finish_sub.set_text(self.tr("You can now reboot into the new system."))
             self.lbl_current_op.set_markup(f"<b>{self.tr('Installation complete!')}</b>")
             self.pbar_finish.set_fraction(1.0)
             self.pbar_finish.set_text("100% ✓")
             self.pbar.set_fraction(1.0)
             self.pbar.set_text("100% ✓")
+            # Start finish page banners
+            GLib.idle_add(self._start_fin_banner)
         else:
-            self.lbl_finish_icon.set_markup("<span font='36'>❌</span>")
-            self.lbl_finish_title.set_markup(
-                f"<b><big>{self.tr('Installation failed')}</big></b>"
-            )
+            self.lbl_finish_title.set_markup(f"<b><big>{self.tr('Installation failed')}</big></b>")
+            self.lbl_finish_sub.set_text(self.tr("Please check the log for details."))
             self.lbl_current_op.set_markup(f"<b>{self.tr('Installation failed')}</b>")
             self.pbar_finish.set_fraction(0.0)
             self.pbar_finish.set_text("Error")
@@ -1300,11 +1458,17 @@ class Installer(Gtk.Assistant):
         except Exception as e:
             self.message(self.tr("Error"), str(e), Gtk.MessageType.ERROR)
 
+    def _on_finish_done(self, *_):
+        """Called when user clicks Done/Hecho on finish page."""
+        if getattr(self, "chk_reboot", None) and self.chk_reboot.get_active():
+            self._on_reboot_clicked()
+        else:
+            self._quit()
+
 def main():
     win = Installer()
     win.show_all()
     Gtk.main()
-    sys.exit(0)
 
 
 if __name__ == "__main__":

@@ -69,5 +69,15 @@
   "locked": "bloquejat",
   "unchanged": "sense canvis",
   "(none)": "(cap)",
-  "Open Essora Locale": "Obre Essora Locale"
+  "Open Essora Locale": "Obre Essora Locale",
+  "Use whole disk (automatic partitioning)": "Utilitza el disc sencer (particionat automàtic)",
+  "Disk:": "Disc:",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ TOTES LES DADES DE {disk} S'ESBORRARAN!",
+  "Mode: Whole disk (automatic partitioning)": "Mode: Disc sencer (particionat automàtic)",
+  "Target disk: {disk}": "Disc destí: {disk}",
+  "Installation complete!": "Instal·lació completada!",
+  "Installation failed": "La instal·lació ha fallat",
+  "Menu": "Menú",
+  "Finished": "Finalitzat",
+  "Preparing installation...": "Preparant la instal·lació..."
 }

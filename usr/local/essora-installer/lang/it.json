@@ -69,5 +69,15 @@
   "locked": "bloccato",
   "unchanged": "invariato",
   "(none)": "(nessuno)",
-  "Open Essora Locale": "Apri Essora Locale"
+  "Open Essora Locale": "Apri Essora Locale",
+  "Use whole disk (automatic partitioning)": "Usa l'intero disco (partizionamento automatico)",
+  "Disk:": "Disco:",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ TUTTI I DATI SU {disk} SARANNO CANCELLATI!",
+  "Mode: Whole disk (automatic partitioning)": "Modalità: Disco intero (partizionamento automatico)",
+  "Target disk: {disk}": "Disco di destinazione: {disk}",
+  "Installation complete!": "Installazione completata!",
+  "Installation failed": "Installazione fallita",
+  "Menu": "Menu",
+  "Finished": "Completato",
+  "Preparing installation...": "Preparazione dell'installazione..."
 }

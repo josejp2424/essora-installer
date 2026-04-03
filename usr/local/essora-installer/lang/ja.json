@@ -69,5 +69,15 @@
   "locked": "ロック",
   "unchanged": "変更なし",
   "(none)": "(なし)",
-  "Open Essora Locale": "Essora Locale を開く"
+  "Open Essora Locale": "Essora Locale を開く",
+  "Use whole disk (automatic partitioning)": "ディスク全体を使用する（自動パーティション）",
+  "Disk:": "ディスク:",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ {disk} のすべてのデータが消去されます！",
+  "Mode: Whole disk (automatic partitioning)": "モード: ディスク全体（自動パーティション）",
+  "Target disk: {disk}": "対象ディスク: {disk}",
+  "Installation complete!": "インストール完了！",
+  "Installation failed": "インストール失敗",
+  "Menu": "メニュー",
+  "Finished": "完了",
+  "Preparing installation...": "インストールを準備中..."
 }

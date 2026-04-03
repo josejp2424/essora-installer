@@ -67,5 +67,17 @@
   "password set": "Passwort gesetzt",
   "locked": "gesperrt",
   "unchanged": "unverändert",
-  "(none)": "(keine)"
+  "(none)": "(keine)",
+  "Use whole disk (automatic partitioning)": "Gesamte Festplatte verwenden (automatische Partitionierung)",
+  "Disk:": "Datenträger:",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ ALLE DATEN AUF {disk} WERDEN GELÖSCHT!",
+  "Mode: Whole disk (automatic partitioning)": "Modus: Gesamte Festplatte (automatische Partitionierung)",
+  "Target disk: {disk}": "Zieldatenträger: {disk}",
+  "Installation complete!": "Installation abgeschlossen!",
+  "Installation failed": "Installation fehlgeschlagen",
+  "Menu": "Menü",
+  "Finished": "Fertig",
+  "Preparing installation...": "Installation wird vorbereitet...",
+  "Open Essora Locale": "Essora Locale öffnen",
+  "About": "Über"
 }

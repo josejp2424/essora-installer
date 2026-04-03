@@ -67,5 +67,17 @@
   "password set": "비밀번호 설정됨",
   "locked": "잠김",
   "unchanged": "변경 없음",
-  "(none)": "(없음)"
+  "(none)": "(없음)",
+  "Use whole disk (automatic partitioning)": "전체 디스크 사용 (자동 파티션)",
+  "Disk:": "디스크:",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ {disk}의 모든 데이터가 삭제됩니다!",
+  "Mode: Whole disk (automatic partitioning)": "모드: 전체 디스크 (자동 파티션)",
+  "Target disk: {disk}": "대상 디스크: {disk}",
+  "Installation complete!": "설치 완료!",
+  "Installation failed": "설치 실패",
+  "Menu": "메뉴",
+  "Finished": "완료",
+  "Preparing installation...": "설치 준비 중...",
+  "Open Essora Locale": "Essora Locale 열기",
+  "About": "정보"
 }

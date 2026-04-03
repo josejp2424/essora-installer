@@ -68,5 +68,16 @@
   "locked": "已鎖定",
   "unchanged": "未變更",
   "(none)": "（無）",
-  "Open Essora Locale": "開啟 Essora Locale"
+  "Open Essora Locale": "開啟 Essora Locale",
+  "Use whole disk (automatic partitioning)": "使用整顆磁碟（自動分割）",
+  "Disk:": "磁碟:",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ {disk} 上的所有資料將被清除！",
+  "Mode: Whole disk (automatic partitioning)": "模式：整顆磁碟（自動分割）",
+  "Target disk: {disk}": "目標磁碟: {disk}",
+  "Installation complete!": "安裝完成！",
+  "Installation failed": "安裝失敗",
+  "Menu": "選單",
+  "Finished": "完成",
+  "Preparing installation...": "正在準備安裝...",
+  "About": "關於"
 }

@@ -69,5 +69,15 @@
   "locked": "مقفل",
   "unchanged": "بدون تغيير",
   "(none)": "(لا شيء)",
-  "Open Essora Locale": "فتح Essora Locale"
+  "Open Essora Locale": "فتح Essora Locale",
+  "Use whole disk (automatic partitioning)": "استخدام القرص بأكمله (تقسيم تلقائي)",
+  "Disk:": "القرص:",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ ستُمحى جميع البيانات على {disk}!",
+  "Mode: Whole disk (automatic partitioning)": "الوضع: القرص بأكمله (تقسيم تلقائي)",
+  "Target disk: {disk}": "القرص المستهدف: {disk}",
+  "Installation complete!": "اكتمل التثبيت!",
+  "Installation failed": "فشل التثبيت",
+  "Menu": "القائمة",
+  "Finished": "انتهى",
+  "Preparing installation...": "جارٍ التحضير للتثبيت..."
 }

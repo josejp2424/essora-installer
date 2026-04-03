@@ -69,5 +69,15 @@
   "locked": "zárolva",
   "unchanged": "változatlan",
   "(none)": "(nincs)",
-  "Open Essora Locale": "Essora Locale megnyitása"
+  "Open Essora Locale": "Essora Locale megnyitása",
+  "Use whole disk (automatic partitioning)": "Teljes lemez használata (automatikus particionálás)",
+  "Disk:": "Lemez:",
+  "⚠ ALL DATA ON {disk} WILL BE ERASED!": "⚠ A {disk} ÖSSZES ADATA TÖRLÉSRE KERÜL!",
+  "Mode: Whole disk (automatic partitioning)": "Mód: Teljes lemez (automatikus particionálás)",
+  "Target disk: {disk}": "Céllemez: {disk}",
+  "Installation complete!": "A telepítés kész!",
+  "Installation failed": "A telepítés sikertelen",
+  "Menu": "Menü",
+  "Finished": "Kész",
+  "Preparing installation...": "Telepítés előkészítése..."
 }

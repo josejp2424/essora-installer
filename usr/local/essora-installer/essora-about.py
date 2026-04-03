@@ -16,17 +16,20 @@ import gi
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GdkPixbuf, Pango, Gdk
 
+# ---------------------------------------------------------------------------
 # Rutas
+# ---------------------------------------------------------------------------
 ICON_PATH  = "/usr/local/essora-installer/icons/essora-installer.png"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION    = "1.2"
+VERSION    = "1.4"
 COPYRIGHT  = "© 2026 josejp2424 — Essora Linux"
 GITHUB_URL = "https://github.com/josejp2424"
 SF_URL     = "https://sourceforge.net/projects/essora/"
 
+# ---------------------------------------------------------------------------
 # CSS — estilo GNOME 3 oscuro
-
+# ---------------------------------------------------------------------------
 _CSS = b"""
 window.about-window {
     background-color: #2d2d2d;
@@ -111,7 +114,9 @@ headerbar.about-header .title {
 }
 """
 
+# ---------------------------------------------------------------------------
 # Traducciones embebidas
+# ---------------------------------------------------------------------------
 _T = {
     "en": {
         "title":        "About Essora Installer",
@@ -406,30 +411,41 @@ def _apply_css():
     try:
         provider.load_from_data(css_data)
     except Exception:
+        # algunas versiones de python3-gi esperan str, no bytes
         try:
             provider.load_from_data(css_data.decode("utf-8"))
         except Exception:
-            pass 
+            pass  # continuar sin CSS si falla
     Gtk.StyleContext.add_provider_for_screen(
         Gdk.Screen.get_default(),
         provider,
         Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION,
     )
 
+
+# ---------------------------------------------------------------------------
+# Widget: fila de URL copiable
+# ---------------------------------------------------------------------------
 class UrlRow(Gtk.Box):
+    """
+    Muestra una URL con un botón 'Copiar' al lado.
+    Funciona como root (no intenta abrir navegador).
+    """
     def __init__(self, label_text: str, url: str, copy_tip: str, copied_text: str):
         super().__init__(orientation=Gtk.Orientation.HORIZONTAL, spacing=8)
         self.url = url
         self._copied_text = copied_text
 
-
+        # Ícono según destino
         icon_name = "emblem-web-symbolic" if "github" not in url else "system-software-update-symbolic"
 
+        # Nombre del servicio
         lbl_name = Gtk.Label(label=label_text)
         lbl_name.set_xalign(0)
         lbl_name.get_style_context().add_class("about-section-title")
         lbl_name.set_width_chars(12)
 
+        # URL en caja con estilo monospace
         url_box = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=0)
         url_box.get_style_context().add_class("about-url-box")
 
@@ -439,6 +455,7 @@ class UrlRow(Gtk.Box):
         lbl_url.get_style_context().add_class("about-url-label")
         url_box.pack_start(lbl_url, True, True, 0)
 
+        # Botón copiar
         self.btn_copy = Gtk.Button(label=copy_tip)
         self.btn_copy.get_style_context().add_class("about-copy-btn")
         self.btn_copy.set_tooltip_text(copy_tip)
@@ -455,6 +472,7 @@ class UrlRow(Gtk.Box):
         clipboard.set_text(self.url, -1)
         clipboard.store()
 
+        # Feedback visual temporal
         self.btn_copy.set_label(self._copied_text)
         self.btn_copy.get_style_context().add_class("copied")
 
@@ -471,6 +489,10 @@ class UrlRow(Gtk.Box):
         self._copy_timer = None
         return False
 
+
+# ---------------------------------------------------------------------------
+# Ventana About — estilo GNOME 3
+# ---------------------------------------------------------------------------
 class AboutEssora(Gtk.Window):
     def __init__(self, lang: str = ""):
         super().__init__()
@@ -491,6 +513,7 @@ class AboutEssora(Gtk.Window):
             self.set_icon(pb_icon)
         main_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0)
         self.add(main_box)
+        # HeaderBar estilo GNOME 3 
         header = Gtk.HeaderBar()
         header.set_show_close_button(True)   
         header.set_title(_t(lg, "title"))

@@ -930,12 +930,28 @@ def do_install(plan: InstallPlan, log: LogFn, progress: Callable[[int], None]):
 _LIVE_USER_NAME = "essora"
 
 
+UNINSTALL_LIST = "/usr/local/essora-installer/uninstall"
+
+
 def _remove_installer_package_from_target(root_mount: str, log: LogFn) -> None:
-    """Remove essora-installer package from the installed system."""
-    log("  [post] Removing essora-installer from installed system...")
+    """Purge packages listed in /usr/local/essora-installer/uninstall."""
+    list_path = os.path.join(root_mount, UNINSTALL_LIST.lstrip("/"))
+    if not os.path.isfile(list_path):
+        log(f"  [post] {UNINSTALL_LIST} not found, skipping package removal.")
+        return
+    try:
+        with open(list_path, "r", encoding="utf-8", errors="ignore") as f:
+            packages = [l.strip() for l in f if l.strip() and not l.startswith("#")]
+    except Exception as e:
+        log(f"  [post] Could not read uninstall list: {e}")
+        return
+    if not packages:
+        return
+    pkg_list = " ".join(shlex.quote(p) for p in packages)
+    log(f"  [post] Purging packages: {', '.join(packages)}")
     run_in_target(
         root_mount,
-        "apt-get purge -y essora-installer 2>/dev/null || true",
+        f"apt-get purge -y {pkg_list} 2>/dev/null || true",
         log,
     )
 

@@ -64,7 +64,7 @@ SUPPORTED_LANGS = {
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ABOUT_SCRIPT = os.path.join(BASE_DIR, "essora-about.py")
-LOCALE_ESSORA_SCRIPT = "/usr/local/locale-essora/locale-essora"
+LOCALE_ESSORA_SCRIPT = "/usr/local/essora-installer/locale-essora"
 
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)

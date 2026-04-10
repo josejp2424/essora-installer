@@ -22,7 +22,7 @@ from gi.repository import Gtk, GdkPixbuf, Pango, Gdk
 ICON_PATH  = "/usr/local/essora-installer/icons/essora-installer.png"
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
-VERSION    = "1.5"
+VERSION    = "1.6"
 COPYRIGHT  = "© 2026 josejp2424 — Essora Linux"
 GITHUB_URL = "https://github.com/josejp2424"
 SF_URL     = "https://sourceforge.net/projects/essora/"

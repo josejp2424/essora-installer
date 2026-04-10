@@ -83,7 +83,6 @@ The installer is built entirely in Python 3 using GTK3 (via PyGObject), with no 
 - Single-instance enforcement
 
 ---
----
 
 ## Screenshots
 
@@ -98,6 +97,7 @@ The installer is built entirely in Python 3 using GTK3 (via PyGObject), with no 
 <p align="center">
   <img src="assets/essora-installe-1.png" alt="Essora VM Screenshot" width="900">
 </p>
+---
 ---
 ## Requirements
 

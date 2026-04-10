@@ -83,7 +83,22 @@ The installer is built entirely in Python 3 using GTK3 (via PyGObject), with no 
 - Single-instance enforcement
 
 ---
+---
 
+## Screenshots
+
+<p align="center">
+  <img src="assets/essora-installer.png" alt="Essora VM Screenshot" width="900">
+</p>
+
+<p align="center">
+  <img src="assets/essora-locale.png" alt="Essora VM Screenshot" width="900">
+</p>
+
+<p align="center">
+  <img src="assets/essora-installe-1.png" alt="Essora VM Screenshot" width="900">
+</p>
+---
 ## Requirements
 
 ### Runtime dependencies (`.deb` Depends)
